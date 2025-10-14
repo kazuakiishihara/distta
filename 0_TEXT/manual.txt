@@ -61,7 +61,7 @@ git init # Git管理は始める
 git add .
 git commit -m "メッセージ"
 git remote add origin https://github.com/kazuakiishihara/ichtrain.git
-git push -u origin main # 次回以降はgit pushでおけ
+git push -u origin master # 次回以降はgit pushでおけ
 
 git config --global --list
 
