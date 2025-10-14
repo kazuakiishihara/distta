@@ -38,6 +38,9 @@ def parse_args():
 
     # Dataset setting
     parser.add_argument('--dataset_label', type=str, default='ixi', help='Dataset label (ixi, lpba)')
+
+    # Task setting
+    parser.add_argument('--task', type=str, default='ar', help='Task label (ar: atlas-based registration, ir: inter-patient registration)')
     
     # Training setting
     parser.add_argument('-bs', "--batch_size", type=int, default=1)
@@ -97,6 +100,7 @@ if __name__ == '__main__':
 
     train_model(
         dataset_label=args.dataset_label,
+        task=args.task,
         model_label=args.model_label,
         lr=args.lr,
         epochs=args.epochs,

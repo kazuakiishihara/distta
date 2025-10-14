@@ -142,8 +142,7 @@ class LPBABrainInferDatasetS2S(Dataset):
         return x, y, x_seg, y_seg
 
 # ----- Medical Image Registration with Test-Time Adaptation -----
-
-class IXIip(Dataset):
+class IXIir(Dataset):
     def __init__(self, data_path, transforms, img_size=(192, 224, 160), num_pairs_per_epoch=400):
         self.paths = data_path
         self.transforms = transforms
@@ -173,7 +172,7 @@ class IXIip(Dataset):
         x, y = torch.from_numpy(x), torch.from_numpy(y)
         return x, y
 
-class IXIipInter(Dataset):
+class IXIirInfer(Dataset):
     def __init__(self, data_path, transforms, img_size=(192, 224, 160)):
         self.paths = data_path
         self.transforms = transforms
@@ -196,8 +195,8 @@ class IXIipInter(Dataset):
         path_y = self.paths[y_index]
         x, x_seg = pkload(path_x)
         y, y_seg = pkload(path_y)
-        x, y = np.transpose(x, (1, 2, 0)), np.transpose(y, (1, 2, 0))
-        x_seg, y_seg = np.transpose(x_seg, (1, 2, 0)), np.transpose(y_seg, (1, 2, 0))
+        x, x_seg = np.transpose(x, (1, 2, 0)), np.transpose(x_seg, (1, 2, 0))
+        y, y_seg = np.transpose(y, (1, 2, 0)), np.transpose(y_seg, (1, 2, 0))
         x, y = x[None, ...], y[None, ...]
         x_seg, y_seg= x_seg[None, ...], y_seg[None, ...]
         x, x_seg = self.transforms([x, x_seg])
@@ -209,19 +208,12 @@ class IXIipInter(Dataset):
         x, y, x_seg, y_seg = torch.from_numpy(x), torch.from_numpy(y), torch.from_numpy(x_seg), torch.from_numpy(y_seg)
         return x, y, x_seg, y_seg
 
-class CLMIipInfer(Dataset):
-    def __init__(self, test_dir, label_dir, mask_dir, transforms, img_size=(192, 224, 160)):
-        paired_list = []
-        files = glob.glob(os.path.join(test_dir, '*.img'))
-        for file in files:
-            filename = os.path.basename(file)
-            atlas_path = os.path.join(label_dir, filename)
-            mask_path = os.path.join(mask_dir, filename)
-            paired_list.append((file, atlas_path, mask_path))
-        self.paths = paired_list
-        self.test_dir = test_dir
-        self.label_dir = label_dir
-        self.mask_dir = mask_dir
+class CLMIirInfer(Dataset):
+    """
+    Inter-patient Registration
+    """
+    def __init__(self, data_path, transforms, img_size=(192, 224, 160)):
+        self.paths = data_path # Tuple: (Head, Segmentation, BrainMask)
         self.transforms = transforms
         self.img_size = img_size
 
@@ -248,14 +240,55 @@ class CLMIipInfer(Dataset):
         y = y * (y_brainmask > 0)
         x = (x - np.min(x)) / (np.max(x) - np.min(x))
         y = (y - np.min(y)) / (np.max(y) - np.min(y))
-        x, y = np.transpose(x, (2, 1, 0)), np.transpose(y, (2, 1, 0))
-        x_seg, y_seg = np.transpose(x_seg, (2, 1, 0)), np.transpose(y_seg, (2, 1, 0))
+        x, x_seg = np.transpose(x, (2, 1, 0)), np.transpose(x_seg, (2, 1, 0))
+        y, y_seg = np.transpose(y, (2, 1, 0)), np.transpose(y_seg, (2, 1, 0))
+        x, x_seg = np.flip(x, axis=0), np.flip(x_seg, axis=0)
+        y, y_seg = np.flip(y, axis=0), np.flip(y_seg, axis=0)
         x, y = resize_volume(x, self.img_size), resize_volume(y, self.img_size)
         x_seg, y_seg = resize_volume(x_seg, self.img_size, order=0), resize_volume(y_seg, self.img_size, order=0)
         x, y = x[None, ...], y[None, ...]
         x_seg, y_seg= x_seg[None, ...], y_seg[None, ...]
         x, x_seg = self.transforms([x, x_seg])
         y, y_seg = self.transforms([y, y_seg])
+        x = np.ascontiguousarray(x)
+        y = np.ascontiguousarray(y)
+        x_seg = np.ascontiguousarray(x_seg)
+        y_seg = np.ascontiguousarray(y_seg)
+        x, y, x_seg, y_seg = torch.from_numpy(x), torch.from_numpy(y), torch.from_numpy(x_seg), torch.from_numpy(y_seg)
+        return x, y, x_seg, y_seg
+
+class CLMIarInfer(Dataset):
+    """
+    Atlas-based Registration
+    """
+    def __init__(self, data_path, atlas_path, transforms, img_size=(192, 224, 160)):
+        self.paths = data_path # Tuple: (Head, Segmentation, BrainMask)
+        self.atlas_path = atlas_path
+        self.transforms = transforms
+        self.img_size = img_size
+
+    def one_hot(self, img, C):
+        out = np.zeros((C, img.shape[1], img.shape[2], img.shape[3]))
+        for i in range(C):
+            out[i,...] = img == i
+        return out
+    
+    def __len__(self):
+        return len(self.paths)
+    
+    def __getitem__(self, index):
+        path = self.paths[index]
+        x, x_seg = pkload(self.atlas_path)
+        y, y_seg, y_brainmask = nib.load(path[0]).get_fdata(), nib.load(path[1]).get_fdata(), nib.load(path[2]).get_fdata()
+        y, y_seg, y_brainmask = np.squeeze(y), np.squeeze(y_seg), np.squeeze(y_brainmask)
+        y = y * (y_brainmask > 0)
+        y = (y - np.min(y)) / (np.max(y) - np.min(y))
+        x, x_seg = np.transpose(x, (1, 2, 0)), np.transpose(x_seg, (1, 2, 0))
+        y, y_seg = np.transpose(y, (2, 1, 0)), np.transpose(y_seg, (2, 1, 0))
+        y, y_seg = np.flip(y, axis=0), np.flip(y_seg, axis=0)
+        y, y_seg = resize_volume(y, self.img_size), resize_volume(y_seg, self.img_size, order=0)
+        x, y = x[None, ...], y[None, ...]
+        x_seg, y_seg= x_seg[None, ...], y_seg[None, ...]
         x = np.ascontiguousarray(x)
         y = np.ascontiguousarray(y)
         x_seg = np.ascontiguousarray(x_seg)

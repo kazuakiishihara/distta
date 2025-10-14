@@ -21,7 +21,7 @@ from utils.utils import AverageMeter, register_model, dice_val_VOI, similarity
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6  # Number of parameters in millions
 
-def train_model(dataset_label, model_label, lr, epochs, batch_size, log_dir, experiment):
+def train_model(dataset_label, task, model_label, lr, epochs, batch_size, log_dir, experiment):
 
     # Write down the training performance into csv file
     csv_path = os.path.join(log_dir, "metrics_per_epoch.csv")
@@ -39,26 +39,34 @@ def train_model(dataset_label, model_label, lr, epochs, batch_size, log_dir, exp
         ckp_dir = log_dir+'/model_wts/'
     
     # Initialize dataset
-    if dataset_label == "ixi":
+    if dataset_label == "ixi" and task == "ar":
         atlas_dir = 'C:/Users/User/env/DATASETS/IXI/atlas.pkl'
         train_dir = 'C:/Users/User/env/DATASETS/IXI/Train/'
+        val_dir = 'C:/Users/User/env/DATASETS/IXI/Val/'
         img_size = (192, 224, 160)
         train_composed = transforms.Compose([trans.NumpyType((np.float32, np.float32))])
         val_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label),
                                             trans.NumpyType((np.float32, np.int16))])
         train_set = datasets.IXIBrainDataset(glob.glob(train_dir + '*.pkl'), atlas_dir, transforms=train_composed, img_size=img_size)
         val_set = datasets.IXIBrainInferDataset(glob.glob(val_dir + '*.pkl'), atlas_dir, transforms=val_composed, img_size=img_size)
-        # train_set = datasets.IXIInterPatient(glob.glob(train_dir + '*.pkl'), transforms=train_composed, img_size=img_size)
-        # val_set = datasets.IXIInterPatientInfer(glob.glob(val_dir + '*.pkl'), transforms=val_composed, img_size=img_size)
-    elif dataset_label == "lpba":
-        train_dir = 'C:/Users/User/env/DATASETS/LPBA/Train/'
-        val_dir = 'C:/Users/User/env/DATASETS/LPBA/Val/'
-        img_size = (160, 192, 160)
+    elif dataset_label == "ixi" and task == "ir":
+        train_dir = 'C:/Users/User/env/DATASETS/IXI_ir/Train/'
+        val_dir = 'C:/Users/User/env/DATASETS/IXI_ir/Val/'
+        img_size = (192, 224, 160)
         train_composed = transforms.Compose([trans.NumpyType((np.float32, np.float32))])
         val_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label),
                                             trans.NumpyType((np.float32, np.int16))])
-        train_set = datasets.LPBABrainDatasetS2S(glob.glob(train_dir + '*.pkl'), transforms=train_composed, img_size=img_size)
-        val_set = datasets.LPBABrainInferDatasetS2S(glob.glob(val_dir + '*.pkl'), transforms=val_composed, img_size=img_size)
+        train_set = datasets.IXIir(glob.glob(train_dir + '*.pkl'), transforms=train_composed, img_size=img_size)
+        val_set = datasets.IXIirInfer(glob.glob(val_dir + '*.pkl'), transforms=val_composed, img_size=img_size)
+    # elif dataset_label == "lpba":
+    #     train_dir = 'C:/Users/User/env/DATASETS/LPBA/Train/'
+    #     val_dir = 'C:/Users/User/env/DATASETS/LPBA/Val/'
+    #     img_size = (160, 192, 160)
+    #     train_composed = transforms.Compose([trans.NumpyType((np.float32, np.float32))])
+    #     val_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label),
+    #                                         trans.NumpyType((np.float32, np.int16))])
+    #     train_set = datasets.LPBABrainDatasetS2S(glob.glob(train_dir + '*.pkl'), transforms=train_composed, img_size=img_size)
+    #     val_set = datasets.LPBABrainInferDatasetS2S(glob.glob(val_dir + '*.pkl'), transforms=val_composed, img_size=img_size)
     else:
         raise ValueError(f"Unsupported dataset_label: {dataset_label}")
     

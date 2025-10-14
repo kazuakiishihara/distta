@@ -2,8 +2,8 @@
 .\venv\Scripts\activate
 
 # Batch Execution for training and validation
-cd ./mir
 cd ./mir/Classical_registration_method/SyN_IXI/
+cd ./distta
 ./0_TEXT/run_commands.ps1
 
 # Shift + Enter
