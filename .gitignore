@@ -1,0 +1,14 @@
+# .gitignore
+# manual.txt
+
+venv/
+venvpro/
+
+__pycache__/
+
+# Log folder
+logs/
+Quantitative_Results/
+Qualitative_Results/
+Ablation_Results/
+

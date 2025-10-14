@@ -1,0 +1,73 @@
+vscodeでvenvを使う
+
+--------------------------------vscode terminal
+１．まず、Ctrl+Shift+Pで、interpreterにローカルのpythonを選択する（なんでもいい）
+
+作業フォルダーを作って、その作業フォルダー下で
+>python -m venv venv
+
+
+２．次に仮想環境venvのpythonを使うため、comand+shift+Pでpython インタラプターから仮想環境venvのpythonを選ぶ
+.\venv\Scripts\python.exeを選ぶ
+
+
+3. 仮想環境をactivateできるようにするため、権限を付与する
+>Get-ExecutionPolicy
+Restricted になっていると、仮想環境をactivateできない
+
+>Set-ExecutionPolicy RemoteSigned -Scope Process
+>Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force #こっちは二回目以降不要
+
+
+4．仮想環境をactivateする
+>.\venv\Scripts\activate
+
+
+5. 一度で複数のコマンドを実行する方法
+run_commands.ps1ファイルに下記みたいな書く。
+'''sh file
+python main_pretrain.py --epochs 100
+python main_pretrain.py --epochs 50
+python run.py
+'''
+
+powerpointターミナルで実行
+>./run_commands.ps1
+
+
+6. pytorchのtensorboardで結果を見る
+>tensorboard --logdir ./trained_model/20240716_151444 # ログファイルが含まっているフォルダーまで
+.tensorboard --logdir=runs
+デフォルトだとlocalhost:6006にアクセスする
+
+A. 実行ファイル（実行コード）のカレントディレクトリを変更する
+(__main__.pyファイルで以下を実行すればいい)
+import os
+os.chdir("mir")  # ここでカレントディレクトリを変更
+print(os.getcwd())  
+
+--------------------------------requirements.txt
+このライブラリーをインストールするコマンドは「.\venv\Scripts\activate」で仮想環境のプロンプトで実行する
+
+仮想環境下でinstall packages
+>pip install -r requirements.txt
+
+出力
+>pip freeze > requirements.txt
+
+
+--------------------------------Githubにpushする（Git Bashターミナルで行う）
+git init # Git管理は始める
+git add .
+git commit -m "メッセージ"
+git remote add origin https://github.com/kazuakiishihara/ichtrain.git
+git push -u origin main # 次回以降はgit pushでおけ
+
+git config --global --list
+
+git stash
+git pull
+git stash pop
+
+git reset --soft HEAD # 直前のコミットを消すが、変更点をそのまま保存
+git reset --hard HEAD # 変更点をすべて破棄
