@@ -56,20 +56,16 @@ def main(dataset_label):
     save_dir = './Quantitative_Results'
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    csv_writter('Model, DSC, Affine DSC, HD95, NJD, %|J|=<0, Params(M)', save_dir+'/{}_performance_results'.format(dataset_label))
+    csv_writter('Model, SSIM, Affine SSIM, NJD, %|J|=<0, Params(M)', save_dir+'/{}_ar_performance_results'.format(dataset_label))
 
     model_idx = -1
-    # project_name = dataset_label + '-experiments'
-    project_name = 'ixi-experiments'
+    project_name = "ixi_ar"
     log_dir = './logs/' + project_name + '/'
     experiments = [run_id for run_id in os.listdir(log_dir)]
-    # target = ['PCNet', 'PRPlusPlus', 'RCN', 'RDN', 'Jul15-173325_IIRPNet']
-    # experiments = [run for run in experiments if any(t in run for t in target)]
 
     if dataset_label == 'ixi':
         test_dir = 'C:/Users/User/env/DATASETS/IXI/Test/'
         img_size = (192, 224, 160)
-        # VOI_lbls = [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 21, 22, 23, 25, 26, 27, 28, 29, 30, 31, 32, 34, 36]
         test_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label),
                                             trans.NumpyType((np.float32, np.int16))])
         test_set = datasets.IXIBrainInferDataset(glob.glob(test_dir + '*.pkl'), atlas_dir, transforms=test_composed, img_size=img_size)
@@ -89,8 +85,6 @@ def main(dataset_label):
         label_dir = 'C:/Users/User/env/DATASETS/CLMI/data/MGH10/Atlases/'
         mask_dir = 'C:/Users/User/env/DATASETS/CLMI/data/MGH10/BrainMasks/'
         img_size = (192, 224, 160)
-        # VOI_lbls = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 
-        #             19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36]
         test_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label),
                                             trans.NumpyType((np.float32, np.int16))])
         test_set = datasets.CLMIarInfer(paired_list(test_dir, label_dir, mask_dir), atlas_dir, transforms=test_composed, img_size=img_size)
@@ -99,8 +93,6 @@ def main(dataset_label):
         label_dir = 'C:/Users/User/env/DATASETS/CLMI/data/CUMC12/Atlases/'
         mask_dir = 'C:/Users/User/env/DATASETS/CLMI/data/CUMC12/BrainMasks/'
         img_size = (192, 224, 160)
-        # VOI_lbls = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
-        #             14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
         test_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label),
                                             trans.NumpyType((np.float32, np.int16))])
         test_set = datasets.CLMIarInfer(paired_list(test_dir, label_dir, mask_dir), atlas_dir, transforms=test_composed, img_size=img_size)
@@ -109,8 +101,6 @@ def main(dataset_label):
         label_dir = 'C:/Users/User/env/DATASETS/CLMI/data/IBSR18/Atlases/'
         mask_dir = 'C:/Users/User/env/DATASETS/CLMI/data/IBSR18/BrainMasks/'
         img_size = (192, 224, 160)
-        # VOI_lbls = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-        #             16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
         test_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label),
                                             trans.NumpyType((np.float32, np.int16))])
         test_set = datasets.CLMIarInfer(paired_list(test_dir, label_dir, mask_dir), atlas_dir, transforms=test_composed, img_size=img_size)
@@ -152,26 +142,6 @@ def main(dataset_label):
                 dsc_new_y = similarity(output[0], y)  # SSIM for y; Deformed vs Fixed
                 dsc_new_x = similarity(output[0], x)  # SSIM for x; Deformed vs Moving
 
-                # # Dice Similarity Coefficients (DSC)
-                # dsc_trans = dice_val_VOI(def_out.long(), y_seg.long(), dataset_label=dataset_label)
-                # dsc_raw = dice_val_VOI(x_seg.long(), y_seg.long(), dataset_label=dataset_label)
-
-                # # 95% Maximum Hausdorff Distance (HD95)
-                # hd95 = 0
-                # count = 0
-                # for i in VOI_lbls:
-                #     if ((x_seg==i).sum()==0) or ((y_seg==i).sum()==0):
-                #         print("contunue")
-                #         continue
-                #     hd95 += compute_robust_hausdorff(
-                #                 compute_surface_distances(
-                #                                         (y_seg.long().detach().cpu().numpy()[0, 0, ...]==i), 
-                #                                         (def_out.long().detach().cpu().numpy()[0, 0, ...]==i), 
-                #                                         np.ones(3)
-                #                                         ), 95.)
-                #     count += 1
-                # hd95 /= count
-
                 # Percentage of Nagative Jacobian DFeterminants (NJD)
                 flow = output[1].detach().cpu().permute(0, 2, 3, 4, 1).numpy().squeeze()
                 NJD_val = NJD(flow)
@@ -183,26 +153,26 @@ def main(dataset_label):
                 print('Trans dsc: {:.4f}, Raw dsc: {:.4f}'.format(dsc_new_y.item(), dsc_new_x.item()))
                 eval_ssim_def.update(dsc_new_y.item(), x.size(0))
                 eval_ssim_raw.update(dsc_new_x.item(), x.size(0))
-                # eval_hd95.update(hd95.item(), x.size(0))
                 eval_njd.update(NJD_val.item(), x.size(0))
                 eval_det.update(folding_ratio, x.size(0))
                 stdy_idx += 1
             
-            print('Deformed DSC: {:.3f} +- {:.3f}, Affine DSC: {:.3f} +- {:.3f}'.format(eval_ssim_def.avg,
+            print('Deformed SSIM: {:.3f} +- {:.3f}, Affine SSIM: {:.3f} +- {:.3f}'.format(
+                                                                                        eval_ssim_def.avg,
                                                                                         eval_ssim_def.std,
                                                                                         eval_ssim_raw.avg,
-                                                                                        eval_ssim_raw.std))
+                                                                                        eval_ssim_raw.std
+                                                                                        ))
             print('deformed det: {:.3f}, std: {:.3f}'.format(eval_det.avg, eval_det.std))
-            line = "{}, {:.6f}+/-{:.6f}, {:.6f}+/-{:.6f}, {:.6f}+/-{:.6f}, {:.8f}+/-{:.8f}, {:.8f}+/-{:.8f}, {:.4f}".format(
+            line = "{}, {:.6f}+/-{:.6f}, {:.6f}+/-{:.6f}, {:.8f}+/-{:.8f}, {:.8f}+/-{:.8f}, {:.4f}".format(
                                                                                 run_id.split("_", 1)[1],
                                                                                 eval_ssim_def.avg, eval_ssim_def.std,
                                                                                 eval_ssim_raw.avg, eval_ssim_raw.std,
-                                                                                # eval_hd95.avg, eval_hd95.std,
                                                                                 eval_njd.avg, eval_njd.std,
                                                                                 eval_det.avg, eval_det.std,
                                                                                 num_params
                                                                                 )
-            csv_writter(line, save_dir+'/{}_performance_results'.format(dataset_label))
+            csv_writter(line, save_dir+'/{}_ar_performance_results'.format(dataset_label))
 
 
 if __name__ == '__main__':

@@ -289,6 +289,8 @@ class CLMIarInfer(Dataset):
         y, y_seg = resize_volume(y, self.img_size), resize_volume(y_seg, self.img_size, order=0)
         x, y = x[None, ...], y[None, ...]
         x_seg, y_seg= x_seg[None, ...], y_seg[None, ...]
+        x, x_seg = self.transforms([x, x_seg])
+        y, y_seg = self.transforms([y, y_seg])
         x = np.ascontiguousarray(x)
         y = np.ascontiguousarray(y)
         x_seg = np.ascontiguousarray(x_seg)

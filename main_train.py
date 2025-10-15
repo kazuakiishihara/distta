@@ -62,13 +62,13 @@ if __name__ == '__main__':
     run_id = '_'.join([dt.strftime('%b%d-%H%M%S'),  # time
                         args.model_label            # model label
                         ])
-    project_name = args.dataset_label + "-experiments"
+    project_name = args.dataset_label + "_" + args.task
 
     # Create the Comet ML experiment instance.
     # Important: this should be done only in the main process to avoid creating multiple experiments when using num_workers > 0.
     experiment = Experiment(
                             api_key="1qdOUPyuagq2Kt5EoyTJu1ZQa",
-                            # project_name=project_name,
+                            project_name=project_name,
                             workspace="k-ishihara",
                             )
     experiment.set_name(run_id)

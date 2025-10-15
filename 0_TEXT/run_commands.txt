@@ -8,6 +8,6 @@ cd ./distta
 
 # Shift + Enter
 import os
-os.chdir("./mir")
+os.chdir("./distta")
 print(os.getcwd())
 """

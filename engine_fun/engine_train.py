@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 
 from data import datasets, trans
-import engine_fun.regisry as regisry 
+import engine_fun.regisry as regisry
 from losses.losses import NCC_vxm, Grad3d
 from utils.utils import AverageMeter, register_model, dice_val_VOI, similarity
 

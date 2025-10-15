@@ -54,24 +54,19 @@ def main(dataset_label):
     save_dir = './Quantitative_Results'
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    csv_writter('Model, DSC, Affine DSC, HD95, NJD, %|J|=<0, Params(M)', save_dir+'/{}_performance_results'.format(dataset_label))
+    csv_writter('Model, DSC, Affine DSC, HD95, NJD, %|J|=<0, Params(M)', save_dir+'/{}_ir_performance_results'.format(dataset_label))
 
     model_idx = -1
-    # project_name = dataset_label + '-experiments'
-    project_name = 'ixi-experiments'
+    project_name = "ixi_ir"
     log_dir = './logs/' + project_name + '/'
     experiments = [run_id for run_id in os.listdir(log_dir)]
-    # target = ['PCNet', 'PRPlusPlus', 'RCN', 'RDN', 'Jul15-173325_IIRPNet']
-    # experiments = [run for run in experiments if any(t in run for t in target)]
 
     if dataset_label == 'ixi':
-        # atlas_dir = 'C:/Users/User/env/DATASETS/IXI/atlas.pkl'
-        test_dir = 'C:/Users/User/env/DATASETS/IXI/Test/'
+        test_dir = 'C:/Users/User/env/DATASETS/IXI_ir/Test/'
         img_size = (192, 224, 160)
         VOI_lbls = [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 21, 22, 23, 25, 26, 27, 28, 29, 30, 31, 32, 34, 36]
         test_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label),
                                             trans.NumpyType((np.float32, np.int16))])
-        # test_set = datasets.IXIBrainInferDataset(glob.glob(test_dir + '*.pkl'), atlas_dir, transforms=test_composed, img_size=img_size)
         test_set = datasets.IXIirInfer(glob.glob(test_dir + '*.pkl'), transforms=test_composed, img_size=img_size)
     # elif dataset_label == 'lpba':
     #     test_dir = 'C:/Users/User/env/DATASETS/LPBA/Test/'
@@ -199,7 +194,7 @@ def main(dataset_label):
                                                                                 eval_det.avg, eval_det.std,
                                                                                 num_params
                                                                                 )
-            csv_writter(line, save_dir+'/{}_performance_results'.format(dataset_label))
+            csv_writter(line, save_dir+'/{}_ir_performance_results'.format(dataset_label))
 
 
 if __name__ == '__main__':

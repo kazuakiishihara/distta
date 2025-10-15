@@ -93,7 +93,6 @@ def get_3DTransMorph_config():
     config.out_indices = (0, 1, 2, 3)
     config.reg_head_chan = 16
     # config.img_size = (64, 64, 64) # NOTE Original setting
-    # config.img_size = (128, 128, 128)
     config.img_size = (192, 224, 160)
     return config
 
