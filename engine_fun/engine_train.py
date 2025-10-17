@@ -101,7 +101,7 @@ def train_model(dataset_label, task, model_label, lr, epochs, batch_size, log_di
             model.train()
             adjust_learning_rate(optimizer, epoch-1, epochs, lr) # Adjust learning rate
             data = [t.cuda() for t in data]
-            x, y = data[0], data[1] # NOTE x and y are moving and fixed images respectively.
+            x, y = data[0], data[1] # x: moving image, y: fixed image
             output = model((x, y))
             loss_ncc = criterion_ncc(output[0], y) * weights[0]
             loss_reg = criterion_reg(output[1], y) * weights[1]

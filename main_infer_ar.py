@@ -10,6 +10,7 @@ from torchvision import transforms
 
 from data import datasets, trans
 import engine_fun.regisry as regisry
+from prompt import TransMorph_SPTTA
 from utils.metrics import *
 from utils.utils import AverageMeter, register_model, jacobian_determinant_vxm, dice_val_VOI, similarity
 
@@ -56,7 +57,8 @@ def main(dataset_label):
     save_dir = './Quantitative_Results'
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    csv_writter('Model, SSIM, Affine SSIM, NJD, %|J|=<0, Params(M)', save_dir+'/{}_ar_performance_results'.format(dataset_label))
+    # csv_writter('Model, SSIM, Affine SSIM, NJD, %|J|=<0, Params(M)', save_dir+'/{}_ar_performance_results'.format(dataset_label))
+    csv_writter('Model, SSIM, Affine SSIM, NJD, %|J|=<0, Params(M)', save_dir+'/{}_ttaar_performance_results'.format(dataset_label)) # NOTE
 
     model_idx = -1
     project_name = "ixi_ar"
@@ -110,10 +112,12 @@ def main(dataset_label):
 
     for run_id in experiments:
         model_label = run_id.split("_")[1]
-        model_dir = log_dir + run_id + '/model_wts/'
+        # model_dir = log_dir + run_id + '/model_wts/'
+        model_dir = log_dir + run_id + '/model_wts_tta/' # NOTE
         print('Run id: {}'.format(run_id))
 
-        model = regisry.build_model(model_label, img_size)
+        # model = regisry.build_model(model_label, img_size)
+        model = TransMorph_SPTTA('./logs/ixi_ar/Oct14-205009_TransMorph/model_wts/TransMorph_dsc0.7417_epoch42.pth.tar') # NOTE
         best_model = torch.load(model_dir + natsorted(os.listdir(model_dir))[model_idx], weights_only=False)['state_dict']
         print('Best model: {}'.format(natsorted(os.listdir(model_dir))[model_idx]))
         model.load_state_dict(best_model)
@@ -172,7 +176,8 @@ def main(dataset_label):
                                                                                 eval_det.avg, eval_det.std,
                                                                                 num_params
                                                                                 )
-            csv_writter(line, save_dir+'/{}_ar_performance_results'.format(dataset_label))
+            # csv_writter(line, save_dir+'/{}_ar_performance_results'.format(dataset_label))
+            csv_writter(line, save_dir+'/{}_ttaar_performance_results'.format(dataset_label)) # NOTE
 
 
 if __name__ == '__main__':

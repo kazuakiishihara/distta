@@ -62,13 +62,14 @@ class TransMorph_SPTTA(nn.Module):
 
     def forward(self, inputs, training=False):
         source, tar = inputs
-        perturbation = self.data_adaptor(torch.cat((source, tar), dim=1)) # [1, 2, 192, 224, 160]
-        adapted_x = inputs + perturbation
+        concatenated_inputs = torch.cat((source, tar), dim=1) # [1, 2, 192, 224, 160]
+        perturbation = self.data_adaptor(concatenated_inputs)
+        adapted_x = concatenated_inputs + perturbation
         if self.transmorph.if_convskip:
             x_s0 = adapted_x.clone()
-            x_s1 = self.avg_pool(adapted_x)
-            f4 = self.c1(x_s1)
-            f5 = self.c2(x_s0)
+            x_s1 = self.transmorph.avg_pool(adapted_x)
+            f4 = self.transmorph.c1(x_s1)
+            f5 = self.transmorph.c2(x_s0)
         else:
             f4 = None
             f5 = None
@@ -80,7 +81,7 @@ class TransMorph_SPTTA(nn.Module):
         # prompt matching
         adapted_bo_fea, attn_weights = self.prompt2feature(x_q=bo_fea[-1], x_kv=self.data_prompt)
         # prompt matching
-        if self.if_transskip:
+        if self.transmorph.if_transskip:
             f1 = bo_fea[-2]
             f2 = bo_fea[-3]
             f3 = bo_fea[-4]
@@ -88,15 +89,21 @@ class TransMorph_SPTTA(nn.Module):
             f1 = None
             f2 = None
             f3 = None
-        x = self.up0(bo_fea[-1], f1)
-        x = self.up1(x, f2)
-        x = self.up2(x, f3)
-        x = self.up3(x, f4)
-        x = self.up4(x, f5)
-        flow = self.reg_head(x)
-        out = self.spatial_trans(source, flow)
+        x = self.transmorph.up0(adapted_bo_fea, f1)
+        x = self.transmorph.up1(x, f2)
+        x = self.transmorph.up2(x, f3)
+        x = self.transmorph.up3(x, f4)
+        x = self.transmorph.up4(x, f5)
+        flow = self.transmorph.reg_head(x)
+        out = self.transmorph.spatial_trans(source, flow)
         if training:
             return out, flow, perturbation, attn_weights
         else:
             return out, flow
 
+if __name__ == '__main__':
+    pretrained_path = './logs/ixi_ar/Oct14-205009_TransMorph/model_wts/TransMorph_dsc0.7417_epoch42.pth.tar'
+    model = TransMorph_SPTTA(pretrained_path)
+    output = model(
+                (torch.rand((1,1,192,224,160)), torch.rand((1,1,192,224,160)))
+                )
