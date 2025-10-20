@@ -141,7 +141,6 @@ class LPBABrainInferDatasetS2S(Dataset):
         x, y, x_seg, y_seg = torch.from_numpy(x), torch.from_numpy(y), torch.from_numpy(x_seg), torch.from_numpy(y_seg)
         return x, y, x_seg, y_seg
 
-# ----- Medical Image Registration with Test-Time Adaptation -----
 class IXIir(Dataset):
     def __init__(self, data_path, transforms, img_size=(192, 224, 160), num_pairs_per_epoch=400):
         self.paths = data_path
@@ -256,6 +255,42 @@ class CLMIirInfer(Dataset):
         y_seg = np.ascontiguousarray(y_seg)
         x, y, x_seg, y_seg = torch.from_numpy(x), torch.from_numpy(y), torch.from_numpy(x_seg), torch.from_numpy(y_seg)
         return x, y, x_seg, y_seg
+
+class CLMIar(Dataset):
+    """
+    Atlas-based Registration
+    """
+    def __init__(self, data_path, atlas_path, transforms, img_size=(192, 224, 160)):
+        self.paths = data_path # Tuple: (Head, Segmentation, BrainMask)
+        self.atlas_path = atlas_path
+        self.transforms = transforms
+        self.img_size = img_size
+
+    def one_hot(self, img, C):
+        out = np.zeros((C, img.shape[1], img.shape[2], img.shape[3]))
+        for i in range(C):
+            out[i,...] = img == i
+        return out
+    
+    def __len__(self):
+        return len(self.paths)
+    
+    def __getitem__(self, index):
+        path = self.paths[index]
+        x, x_seg = pkload(self.atlas_path)
+        y, y_brainmask = nib.load(path[0]).get_fdata(), nib.load(path[2]).get_fdata()
+        y, y_brainmask = np.squeeze(y), np.squeeze(y_brainmask)
+        y = y * (y_brainmask > 0)
+        y = (y - np.min(y)) / (np.max(y) - np.min(y))
+        x, y = np.transpose(x, (1, 2, 0)), np.transpose(y, (2, 1, 0))
+        y = np.flip(y, axis=0)
+        y = resize_volume(y, self.img_size)
+        x, y = x[None, ...], y[None, ...]
+        x, y = self.transforms([x, y])
+        x = np.ascontiguousarray(x)
+        y = np.ascontiguousarray(y)
+        x, y = torch.from_numpy(x), torch.from_numpy(y)
+        return x, y
 
 class CLMIarInfer(Dataset):
     """

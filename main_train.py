@@ -43,9 +43,9 @@ def parse_args():
     parser.add_argument('--task', type=str, default='ar', help='Task label (ar: atlas-based registration, ir: inter-patient registration)')
     
     # Training setting
-    parser.add_argument('-bs', "--batch_size", type=int, default=1)
-    parser.add_argument('-e', "--epochs", type=int, default=100)
     parser.add_argument("--lr", type=float, default=0.0001)
+    parser.add_argument('-e', "--epochs", type=int, default=100)
+    parser.add_argument('-bs', "--batch_size", type=int, default=1)
 
     # Network structure settings
     parser.add_argument('--model_label', type=str, default='TransMorph', 

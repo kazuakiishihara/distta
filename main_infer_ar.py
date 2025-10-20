@@ -10,7 +10,7 @@ from torchvision import transforms
 
 from data import datasets, trans
 import engine_fun.regisry as regisry
-from prompt import TransMorph_SPTTA
+from test_time_adaptation.prompt import TransMorph_SPTTA
 from utils.metrics import *
 from utils.utils import AverageMeter, register_model, jacobian_determinant_vxm, dice_val_VOI, similarity
 
