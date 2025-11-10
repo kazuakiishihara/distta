@@ -60,6 +60,34 @@ def dice_val(y_pred, y_true, num_clus):
     dsc = (2.*intersection) / (union + 1e-5)
     return torch.mean(torch.mean(dsc, dim=1))
 
+def dice_val_VOI(y_pred, y_true, dataset_label='ixi'):
+    if dataset_label == "ixi":
+        VOI_lbls = [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 21, 22, 23, 25, 26, 27, 28, 29, 30, 31, 32, 34, 36]
+    elif dataset_label == "lpba":
+        VOI_lbls = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+                    12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                    24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+                    36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+                    48, 49, 50, 51, 52, 53, 54]
+    elif dataset_label == "mgh":
+        VOI_lbls = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 
+                    19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36]
+    pred = y_pred.detach().cpu().numpy()[0, 0, ...]
+    true = y_true.detach().cpu().numpy()[0, 0, ...]
+    DSCs = np.zeros((len(VOI_lbls), 1))
+    idx = 0
+    for i in VOI_lbls:
+        pred_i = pred == i
+        true_i = true == i
+        intersection = pred_i * true_i
+        intersection = np.sum(intersection)
+        union = np.sum(pred_i) + np.sum(true_i)
+        dsc = (2.*intersection) / (union + 1e-5)
+        DSCs[idx] =dsc
+        idx += 1
+    return np.mean(DSCs)
+
+
 def dice_val_substruct(y_pred, y_true, std_idx):
     with torch.no_grad():
         y_pred = nn.functional.one_hot(y_pred, num_classes=46)

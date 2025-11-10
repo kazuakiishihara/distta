@@ -41,8 +41,8 @@ class AverageMeter(object):
         self.std = np.std(self.vals)
 
 def main():
-    atlas_dir = 'Path_to_IXI_data/atlas.pkl'
-    test_dir = 'Path_to_IXI_data/Val/'
+    atlas_dir = 'C:/Users/User/env/DATASETS/IXI/atlas.pkl'
+    test_dir = 'C:/Users/User/env/DATASETS/IXI/Test/'
     dict = utils.process_label()
     line = ''
     for i in range(46):
@@ -84,13 +84,14 @@ def main():
             #def_seg = def_seg[-1].cpu().numpy()
             #def_seg = torch.from_numpy(def_seg[None, None, ...])
             tar_seg = torch.from_numpy(y_seg[None, None, ...])
-            dsc_trans = utils.dice_val(def_seg.long().cuda(), tar_seg.long().cuda(), 46)
+            # dsc_trans = utils.dice_val(def_seg.long().cuda(), tar_seg.long().cuda(), 46)
+            dsc_trans = utils.dice_val_VOI(def_seg.long(), y_seg.long(), dataset_label="ixi")
             eval_dsc_def.update(dsc_trans.item(), 1)
             jac_det = utils.jacobian_determinant_vxm(flow)
             print('det < 0: {}'.format(np.sum(jac_det <= 0) / np.prod(y_seg.shape)))
             line = utils.dice_val_substruct(def_seg.long(), tar_seg.long(), stdy_idx)
             line = line + ',' + str(np.sum(jac_det <= 0) / np.prod(y_seg.shape))
-            csv_writter(line, file_name)
+            csv_writter(line, 'lddmm_IXI')
             print('DSC: {:.4f}'.format(dsc_trans.item()))
             eval_det.update(np.sum(jac_det <= 0) / np.prod(y_seg.shape), 1)
             stdy_idx += 1

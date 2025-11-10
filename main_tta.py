@@ -13,7 +13,7 @@ from torchvision import transforms
 from data import datasets, trans
 from losses.losses import NCC_vxm, Grad3d
 from test_time_adaptation.prompt import TransMorph_SPTTA
-from utils.utils import AverageMeter
+from utils.utils import AverageMeter, register_model, dice_val_VOI, similarity
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Test Model for Image Registration')
@@ -26,12 +26,12 @@ def parse_args():
     
     # Training setting
     parser.add_argument("--lr", type=float, default=0.0001)
-    parser.add_argument('-e', "--epochs", type=int, default=10)
+    parser.add_argument('-e', "--epochs", type=int, default=20)
     parser.add_argument('-bs', "--batch_size", type=int, default=1)
 
     return parser.parse_args()
 
-def main(dataset_label='ixi', task='ar', lr=0.0001, epochs=50, batch_size=1, log_dir='./logs/ixi_ar/Oct14-205009_TransMorph/'):
+def main(dataset_label='ixi', task='ar', lr=0.0001, epochs=50, batch_size=1, log_dir='./logs/ixi_ar/Nov07-220129_TransMorph_DS/'):
 
     # Set the weights of the loss funtion
     weights = [1.0, 1.0]
@@ -47,8 +47,10 @@ def main(dataset_label='ixi', task='ar', lr=0.0001, epochs=50, batch_size=1, log
         atlas_dir = 'C:/Users/User/env/DATASETS/IXI/atlas.pkl'
         test_dir = 'C:/Users/User/env/DATASETS/IXI/Test/'
         img_size = (192, 224, 160)
-        test_composed = transforms.Compose([trans.NumpyType((np.float32, np.float32))])
-        test_set = datasets.IXIBrainDataset(glob.glob(test_dir + '*.pkl'), atlas_dir, transforms=test_composed, img_size=img_size)
+        # test_composed = transforms.Compose([trans.NumpyType((np.float32, np.float32))])
+        test_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label), # NOTE IXI
+                                            trans.NumpyType((np.float32, np.int16))])
+        test_set = datasets.IXIBrainInferDataset(glob.glob(test_dir + '*.pkl'), atlas_dir, transforms=test_composed, img_size=img_size) # NOTE IXI
     elif dataset_label == 'mgh':
         atlas_dir = 'C:/Users/User/env/DATASETS/IXI/atlas.pkl'
         test_dir = 'C:/Users/User/env/DATASETS/CLMI/data/MGH10/Heads/'
@@ -67,6 +69,10 @@ def main(dataset_label='ixi', task='ar', lr=0.0001, epochs=50, batch_size=1, log
         if v.requires_grad:
             print('Trainable', k)
 
+    # Initialize spatial transformation function
+    reg_model = register_model(img_size, 'nearest')
+    reg_model.cuda()
+
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0, amsgrad=True)
     criterion_ncc = NCC_vxm()
     criterion_reg = Grad3d(penalty='l2')
@@ -77,6 +83,7 @@ def main(dataset_label='ixi', task='ar', lr=0.0001, epochs=50, batch_size=1, log
         '''
         start_time = time.time()
         loss_all = AverageMeter()
+        eval_dsc = AverageMeter() # NOTE IXI
         idx = 0
         for data in test_loader:
             idx += 1
@@ -84,24 +91,30 @@ def main(dataset_label='ixi', task='ar', lr=0.0001, epochs=50, batch_size=1, log
             adjust_learning_rate(optimizer, epoch-1, epochs, lr) # Adjust learning rate
             data = [t.cuda() for t in data]
             x, y = data[0], data[1] # x: moving image, y: fixed image
+            x_seg, y_seg = data[2], data[3] # NOTE IXI
             output = model((x, y))
             loss_ncc = criterion_ncc(output[0], y) * weights[0]
             loss_reg = criterion_reg(output[1], y) * weights[1]
             loss = loss_ncc  + loss_reg
             loss_all.update(loss.item(), y.numel())
 
+            # NOTE IXI
+            def_out = reg_model([x_seg.cuda().float(), output[1].cuda()])
+            dsc = dice_val_VOI(def_out.long(), y_seg.long(), dataset_label=dataset_label)
+            eval_dsc.update(dsc.item(), x.size(0))
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            print('Iter {} of {} loss {:.4f}, Img Sim: {:.6f}, Reg: {:.6f}'.format(
-                idx, len(test_loader), loss.item(), loss_ncc.item(), loss_reg.item()
+            print('Iter {} of {} Dice score {:.4f} loss {:.4f}, Img Sim: {:.6f}, Reg: {:.6f}'.format( # NOTE IXI
+                idx, len(test_loader), dsc.item(), loss.item(), loss_ncc.item(), loss_reg.item()
             ))
         
         adaptation_time = time.time() - start_time
         remaining_adaptation_time = (adaptation_time * (epochs - epoch)) / 3600
-        print('Epoch {} loss {:.4f} Time Left {:.2f}h'.format(
-            epoch, loss_all.avg, remaining_adaptation_time
+        print('Epoch {} mDice {:.4f} loss {:.4f} Time Left {:.2f}h'.format( # NOTE IXI
+            epoch, eval_dsc.avg, loss_all.avg, remaining_adaptation_time
         ))
 
         save_checkpoint({

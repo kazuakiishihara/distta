@@ -903,7 +903,85 @@ class TransMorph(nn.Module):
         out = self.spatial_trans(source, flow)
         return out, flow
 
+class TransMorph_DS(nn.Module):
+    def __init__(self, config, img_size):
+        '''
+        TransMorph Model
+        '''
+        super(TransMorph_DS, self).__init__()
+        if_convskip = config.if_convskip
+        self.if_convskip = if_convskip
+        if_transskip = config.if_transskip
+        self.if_transskip = if_transskip
+        embed_dim = config.embed_dim
+        self.transformer = SwinTransformer(pretrain_img_size=img_size[0],
+                                            patch_size=config.patch_size,
+                                            in_chans=config.in_chans,        # !!! Because of dual-steam encoder, set to 1 at config file.
+                                            embed_dim=config.embed_dim // 2, # !!! Halve the channel dimensions
+                                            depths=config.depths,
+                                            num_heads=config.num_heads,
+                                            window_size=config.window_size,
+                                            mlp_ratio=config.mlp_ratio,
+                                            qkv_bias=config.qkv_bias,
+                                            drop_rate=config.drop_rate,
+                                            drop_path_rate=config.drop_path_rate,
+                                            ape=config.ape,
+                                            spe=config.spe,
+                                            rpe=config.rpe,
+                                            patch_norm=config.patch_norm,
+                                            use_checkpoint=config.use_checkpoint,
+                                            out_indices=config.out_indices,
+                                            pat_merg_rf=config.pat_merg_rf,
+                                            )
+        self.up0 = DecoderBlock(embed_dim*8, embed_dim*4, skip_channels=embed_dim*4 if if_transskip else 0, use_batchnorm=False)
+        self.up1 = DecoderBlock(embed_dim*4, embed_dim*2, skip_channels=embed_dim*2 if if_transskip else 0, use_batchnorm=False)  # 384, 20, 20, 64
+        self.up2 = DecoderBlock(embed_dim*2, embed_dim, skip_channels=embed_dim if if_transskip else 0, use_batchnorm=False)  # 384, 40, 40, 64
+        self.up3 = DecoderBlock(embed_dim, embed_dim//2, skip_channels=embed_dim//2 if if_convskip else 0, use_batchnorm=False)  # 384, 80, 80, 128
+        self.up4 = DecoderBlock(embed_dim//2, config.reg_head_chan, skip_channels=config.reg_head_chan if if_convskip else 0, use_batchnorm=False)  # 384, 160, 160, 256
+        self.c1 = Conv3dReLU(2, embed_dim//2, 3, 1, use_batchnorm=False)
+        self.c2 = Conv3dReLU(2, config.reg_head_chan, 3, 1, use_batchnorm=False)
+        self.reg_head = RegistrationHead(
+            in_channels=config.reg_head_chan,
+            out_channels=3,
+            kernel_size=3,
+        )
+        self.spatial_trans = SpatialTransformer(config.img_size)
+        self.avg_pool = nn.AvgPool3d(3, stride=2, padding=1)
+
+    def forward(self, inputs):
+        source, tar = inputs
+        x = torch.cat((source, tar), dim=1)
+        if self.if_convskip:
+            x_s0 = x.clone()
+            x_s1 = self.avg_pool(x)
+            f4 = self.c1(x_s1)
+            f5 = self.c2(x_s0)
+        else:
+            f4 = None
+            f5 = None
+
+        out_feats_m = self.transformer(source) # !!! Dual-stream encoder
+        out_feats_f = self.transformer(tar)    # !!! Dual-stream encoder
+
+        if self.if_transskip:
+            f1 = torch.cat((out_feats_m[-2], out_feats_f[-2]), dim=1)
+            f2 = torch.cat((out_feats_m[-3], out_feats_f[-3]), dim=1)
+            f3 = torch.cat((out_feats_m[-4], out_feats_f[-4]), dim=1)
+        else:
+            f1 = None
+            f2 = None
+            f3 = None
+        x = self.up0(torch.cat((out_feats_m[-1], out_feats_f[-1]), dim=1), f1)
+        x = self.up1(x, f2)
+        x = self.up2(x, f3)
+        x = self.up3(x, f4)
+        x = self.up4(x, f5)
+        flow = self.reg_head(x)
+        out = self.spatial_trans(source, flow)
+        return out, flow, out_feats_m, out_feats_f
+
 CONFIGS = {
+    'TransMorph_DS': configs.get_3DTransMorph_DS_config(),
     'TransMorph': configs.get_3DTransMorph_config(),
     'TransMorph-No-Conv-Skip': configs.get_3DTransMorphNoConvSkip_config(),
     'TransMorph-No-Trans-Skip': configs.get_3DTransMorphNoTransSkip_config(),

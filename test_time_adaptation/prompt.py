@@ -27,10 +27,10 @@ class CrossAttention(nn.Module):
 
         # calculate attention weights with scaled dot-product attention
         attn_weights = torch.matmul(query, key) / (num_prompt ** 0.5)
-        attn_weights = torch.nn.functional.softmax(attn_weights, dim=-1)
+        attn_weights = F.softmax(attn_weights, dim=-1) # Shape in attention map: [C, K]
 
         # sparsity atten
-        num_non_zero = int(0.1 * attn_weights.size(1))
+        num_non_zero = int(0.1 * attn_weights.size(1)) # Activate 10% of shape template only
         sorted_values, sorted_indices = torch.sort(attn_weights, descending=True, dim=1)
         mask = torch.zeros_like(attn_weights)
         mask.scatter_(1, sorted_indices[:, :num_non_zero], 1)
@@ -47,47 +47,50 @@ class CrossAttention(nn.Module):
 class TransMorph_SPTTA(nn.Module):
     def __init__(self, pretrained_path, patch_size=(192, 224, 160)):
         super().__init__()
-        data_prompt = torch.zeros(1, 768, patch_size[0]//32, patch_size[1]//32, patch_size[2]//32)
-        # self.data_prompt = nn.Parameter(data_prompt)
-        # self.prompt2feature = CrossAttention(C=768, K=768)
-        self.data_adaptor = nn.Sequential(nn.Conv3d(2, 32, 1), 
+        data_prompt = torch.zeros(1, 768//2, patch_size[0]//32, patch_size[1]//32, patch_size[2]//32)
+        self.data_prompt = nn.Parameter(data_prompt)
+        self.prompt2feature = CrossAttention(C=768//2, K=768//2)
+        self.data_adaptor = nn.Sequential(nn.Conv3d(1, 32, 1, stride=1, padding=0), 
                                         nn.InstanceNorm3d(32),
-                                        nn.ReLU(inplace=True), 
-                                        nn.Conv3d(32, 2, 1))
-        self.transmorph = regisry.build_model('TransMorph', (192, 224, 160))
+                                        nn.ReLU(inplace=True),
+                                        nn.Conv3d(32, 1, 1, stride=1, padding=0))
+        self.transmorph = regisry.build_model('TransMorph_DS', (192, 224, 160))
         pretrained_params = torch.load(pretrained_path, weights_only=False)['state_dict']
         self.transmorph.load_state_dict(pretrained_params)
         for name, param in self.transmorph.named_parameters():
-            param.requires_grad = False
+            if 'norm' in name:
+                param.requires_grad = True
+            else:
+                param.requires_grad = False
 
     def forward(self, inputs):
-        source, tar = inputs
-        concatenated_inputs = torch.cat((source, tar), dim=1) # [1, 2, 192, 224, 160]
-        perturbation = self.data_adaptor(concatenated_inputs)
-        adapted_x = concatenated_inputs + perturbation
+        source, tar = inputs # moving, fixed
+        perturbation = self.data_adaptor(tar) # NOTE For atlas-based registration
+        tar = tar + perturbation
+        x = torch.cat((source, tar), dim=1)
         if self.transmorph.if_convskip:
-            x_s0 = adapted_x.clone()
-            x_s1 = self.transmorph.avg_pool(adapted_x)
+            x_s0 = x.clone()
+            x_s1 = self.transmorph.avg_pool(x)
             f4 = self.transmorph.c1(x_s1)
             f5 = self.transmorph.c2(x_s0)
         else:
             f4 = None
             f5 = None
         
-        bo_fea = self.transmorph.transformer(adapted_x)
+        feats_m = self.transmorph.transformer(source)
+        feats_f = self.transmorph.transformer(tar)
 
-        # adapted_bo_fea, attn_weights = self.prompt2feature(x_q=bo_fea[-1], x_kv=self.data_prompt)
+        adapted_feats_f, attn_weights = self.prompt2feature(x_q=feats_f[-1], x_kv=self.data_prompt)
 
         if self.transmorph.if_transskip:
-            f1 = bo_fea[-2]
-            f2 = bo_fea[-3]
-            f3 = bo_fea[-4]
+            f1 = torch.cat((feats_m[-2], feats_f[-2]), dim=1)
+            f2 = torch.cat((feats_m[-3], feats_f[-3]), dim=1)
+            f3 = torch.cat((feats_m[-4], feats_f[-4]), dim=1)
         else:
             f1 = None
             f2 = None
             f3 = None
-        x = self.transmorph.up0(bo_fea[-1], f1)
-        # x = self.transmorph.up0(adapted_bo_fea, f1)
+        x = self.transmorph.up0(torch.cat((feats_m[-1], adapted_feats_f), dim=1), f1)
         x = self.transmorph.up1(x, f2)
         x = self.transmorph.up2(x, f3)
         x = self.transmorph.up3(x, f4)

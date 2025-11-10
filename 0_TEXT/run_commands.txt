@@ -2,7 +2,9 @@
 .\venv\Scripts\activate
 
 # Batch Execution for training and validation
-cd ./mir/Classical_registration_method/SyN_IXI/
+cd ./distta/Classical_registration_method/LDDMM/
+python infer_IXI.py
+
 cd ./distta
 ./0_TEXT/run_commands.ps1
 

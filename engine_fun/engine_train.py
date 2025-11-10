@@ -15,13 +15,13 @@ from torchvision import transforms
 
 from data import datasets, trans
 import engine_fun.regisry as regisry
-from losses.losses import NCC_vxm, Grad3d
+from losses.losses import NCC_vxm, DiceLoss, Grad3d
 from utils.utils import AverageMeter, register_model, dice_val_VOI, similarity
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6  # Number of parameters in millions
 
-def train_model(dataset_label, task, model_label, lr, epochs, batch_size, log_dir, experiment):
+def train_model(dataset_label, task, seg_loss, model_label, lr, epochs, batch_size, log_dir, experiment):
 
     # Write down the training performance into csv file
     csv_path = os.path.join(log_dir, "metrics_per_epoch.csv")
@@ -31,7 +31,7 @@ def train_model(dataset_label, task, model_label, lr, epochs, batch_size, log_di
             writer.writerow(['step', 'train_loss', 'val_dice', 'val_SSIM_for_x', 'val_SSIM_for_y'])
 
     # Set the weights of the loss funtion
-    weights = [1.0, 1.0]
+    weights = [1.0, 1.0, 1.0]
 
     if not os.path.exists(log_dir+'/model_wts/'):
         print("Creating ckp dir", os.path.abspath(log_dir))
@@ -39,32 +39,32 @@ def train_model(dataset_label, task, model_label, lr, epochs, batch_size, log_di
         ckp_dir = log_dir+'/model_wts/'
     
     # Initialize dataset
+    train_composed = transforms.Compose([trans.NumpyType((np.float32, np.float32))])
+    val_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label),
+                                        trans.NumpyType((np.float32, np.int16))])
     if dataset_label == "ixi" and task == "ar":
         atlas_dir = 'C:/Users/User/env/DATASETS/IXI/atlas.pkl'
         train_dir = 'C:/Users/User/env/DATASETS/IXI/Train/'
         val_dir = 'C:/Users/User/env/DATASETS/IXI/Val/'
         img_size = (192, 224, 160)
-        train_composed = transforms.Compose([trans.NumpyType((np.float32, np.float32))])
-        val_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label),
-                                            trans.NumpyType((np.float32, np.int16))])
-        train_set = datasets.IXIBrainDataset(glob.glob(train_dir + '*.pkl'), atlas_dir, transforms=train_composed, img_size=img_size)
+        if seg_loss:
+            train_set = datasets.IXIBrainInferDataset(glob.glob(train_dir + '*.pkl'), atlas_dir, transforms=val_composed, img_size=img_size)
+        else:
+            train_set = datasets.IXIBrainDataset(glob.glob(train_dir + '*.pkl'), atlas_dir, transforms=train_composed, img_size=img_size)
         val_set = datasets.IXIBrainInferDataset(glob.glob(val_dir + '*.pkl'), atlas_dir, transforms=val_composed, img_size=img_size)
     elif dataset_label == "ixi" and task == "ir":
         train_dir = 'C:/Users/User/env/DATASETS/IXI_ir/Train/'
         val_dir = 'C:/Users/User/env/DATASETS/IXI_ir/Val/'
         img_size = (192, 224, 160)
-        train_composed = transforms.Compose([trans.NumpyType((np.float32, np.float32))])
-        val_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label),
-                                            trans.NumpyType((np.float32, np.int16))])
-        train_set = datasets.IXIir(glob.glob(train_dir + '*.pkl'), transforms=train_composed, img_size=img_size)
+        if seg_loss:
+            train_set = datasets.IXIirInfer(glob.glob(train_dir + '*.pkl'), transforms=val_composed, img_size=img_size)
+        else:
+            train_set = datasets.IXIir(glob.glob(train_dir + '*.pkl'), transforms=train_composed, img_size=img_size)
         val_set = datasets.IXIirInfer(glob.glob(val_dir + '*.pkl'), transforms=val_composed, img_size=img_size)
     # elif dataset_label == "lpba":
     #     train_dir = 'C:/Users/User/env/DATASETS/LPBA/Train/'
     #     val_dir = 'C:/Users/User/env/DATASETS/LPBA/Val/'
     #     img_size = (160, 192, 160)
-    #     train_composed = transforms.Compose([trans.NumpyType((np.float32, np.float32))])
-    #     val_composed = transforms.Compose([trans.Seg_norm(dataset_label=dataset_label),
-    #                                         trans.NumpyType((np.float32, np.int16))])
     #     train_set = datasets.LPBABrainDatasetS2S(glob.glob(train_dir + '*.pkl'), transforms=train_composed, img_size=img_size)
     #     val_set = datasets.LPBABrainInferDatasetS2S(glob.glob(val_dir + '*.pkl'), transforms=val_composed, img_size=img_size)
     else:
@@ -86,6 +86,7 @@ def train_model(dataset_label, task, model_label, lr, epochs, batch_size, log_di
 
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0, amsgrad=True)
     criterion_ncc = NCC_vxm()
+    criterion_dsc = DiceLoss()
     criterion_reg = Grad3d(penalty='l2')
     
     best_dsc = 0
@@ -102,10 +103,25 @@ def train_model(dataset_label, task, model_label, lr, epochs, batch_size, log_di
             adjust_learning_rate(optimizer, epoch-1, epochs, lr) # Adjust learning rate
             data = [t.cuda() for t in data]
             x, y = data[0], data[1] # x: moving image, y: fixed image
+            if seg_loss:
+                x_seg, y_seg = data[2], data[3]
             output = model((x, y))
+
+            # Loss calculation
             loss_ncc = criterion_ncc(output[0], y) * weights[0]
-            loss_reg = criterion_reg(output[1], y) * weights[1]
-            loss = loss_ncc  + loss_reg
+            if seg_loss:
+                def_out = reg_model([x_seg.cuda().float(), output[1].cuda()])
+                loss_dsc = criterion_dsc(def_out.long(), y_seg.long()) * weights[1]
+                if model_label == 'MoSE':
+                    loss_dsc_m = criterion_dsc(output[2][0].long(), x_seg.long()) * 1.0
+                    loss_dsc_f = criterion_dsc(output[3][0].long(), y_seg.long()) * 1.0
+                    loss_norm_m = torch.norm(output[2][1], p=1)
+                    loss_norm_f = torch.norm(output[3][1], p=1)
+                    loss_dsc += loss_dsc_m + loss_dsc_f + loss_norm_m + loss_norm_f
+            else:
+                loss_dsc = 0
+            loss_reg = criterion_reg(output[1], y) * weights[2]
+            loss = loss_ncc + loss_dsc + loss_reg
             loss_all.update(loss.item(), y.numel())
 
             optimizer.zero_grad()

@@ -4,6 +4,12 @@ def build_TransMorph(img_size):
     config = CONFIGS_TM['TransMorph']
     return TransMorph(config, img_size)
 
+def build_TransMorph_DS(img_size):
+    from networks.transmorph.TransMorph import TransMorph_DS
+    from networks.transmorph.TransMorph import CONFIGS as CONFIGS_TM
+    config = CONFIGS_TM['TransMorph_DS']
+    return TransMorph_DS(config, img_size)
+
 def build_CorrMLP(img_size):
     from networks.corrmlp.CorrMLP import CorrMLP
     return CorrMLP()
@@ -29,6 +35,7 @@ def build_EfficientMorph(img_size):
 
 MODEL_FACTORY = {
     "TransMorph": build_TransMorph,
+    "TransMorph_DS": build_TransMorph_DS,
     "CorrMLP": build_CorrMLP,
     "GroupMorph": build_GroupMorph,
     "IIRPNet": build_IIRPNet,

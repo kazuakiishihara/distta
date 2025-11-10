@@ -41,10 +41,11 @@ def parse_args():
 
     # Task setting
     parser.add_argument('--task', type=str, default='ar', help='Task label (ar: atlas-based registration, ir: inter-patient registration)')
+    parser.add_argument('--segloss', type=bool, default=False, help='Task label (ar: atlas-based registration, ir: inter-patient registration)')
     
     # Training setting
     parser.add_argument("--lr", type=float, default=0.0001)
-    parser.add_argument('-e', "--epochs", type=int, default=100)
+    parser.add_argument('-e', "--epochs", type=int, default=30)
     parser.add_argument('-bs', "--batch_size", type=int, default=1)
 
     # Network structure settings
@@ -101,6 +102,7 @@ if __name__ == '__main__':
     train_model(
         dataset_label=args.dataset_label,
         task=args.task,
+        seg_loss=args.segloss,
         model_label=args.model_label,
         lr=args.lr,
         epochs=args.epochs,
