@@ -18,6 +18,7 @@ from utils.utils import AverageMeter, register_model, jacobian_determinant_vxm, 
 def parse_args():
     parser = argparse.ArgumentParser(description='Test Model for Image Registration')
     parser.add_argument('--dataset_label', type=str, default='ixi', help='Dataset label (ixi, lpba)')
+    parser.add_argument('--test_mode', type=str, default='standard', help='Test label (stardard, tta)')
     return parser.parse_args()
 
 def NJD(displacement):
@@ -51,7 +52,7 @@ def paired_list(test_dir, label_dir, mask_dir):
         paired_list.append((file, atlas_path, mask_path))
     return paired_list
 
-def main(dataset_label, test_mode):
+def main(dataset_label, test_mode='standard'):
 
     atlas_dir = 'C:/Users/User/env/DATASETS/IXI/atlas.pkl'
 
@@ -122,7 +123,7 @@ def main(dataset_label, test_mode):
             model = regisry.build_model(model_label, img_size)
         elif test_mode == 'tta':
             model_dir = log_dir + run_id + 'tta/{}/model_wts/'.format(dataset_label) # !!! 
-            model = TransMorph_SPTTA('./logs/ixi_ar/Oct14-205009_TransMorph/model_wts/TransMorph_dsc0.7417_epoch42.pth.tar') 
+            model = TransMorph_SPTTA('./logs/ixi_ar/Nov12-213347_TransMorph-DS/model_wts/TransMorph-DS_dsc0.7411_epoch34.pth.tar') 
         print('Run id: {}'.format(run_id))
 
         best_model = torch.load(model_dir + natsorted(os.listdir(model_dir))[model_idx], weights_only=False)['state_dict']
@@ -163,7 +164,7 @@ def main(dataset_label, test_mode):
                 jac_det = jacobian_determinant_vxm(output[1].detach().cpu().numpy()[0, :, :, :, :])
                 folding_ratio = np.sum(jac_det <= 0) / np.prod(tar.shape) * 100
 
-                print('Trans dsc: {:.4f}, Raw dsc: {:.4f}'.format(dsc_new_y.item(), dsc_new_x.item()))
+                print('Trans ssim: {:.4f}, Raw ssim: {:.4f}'.format(dsc_new_y.item(), dsc_new_x.item()))
                 eval_mse.update(mse.item(), x.size(0))
                 eval_ssim_def.update(dsc_new_y.item(), x.size(0))
                 eval_ssim_raw.update(dsc_new_x.item(), x.size(0))

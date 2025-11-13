@@ -35,7 +35,7 @@ def build_EfficientMorph(img_size):
 
 MODEL_FACTORY = {
     "TransMorph": build_TransMorph,
-    "TransMorph_DS": build_TransMorph_DS,
+    "TransMorph-DS": build_TransMorph_DS,
     "CorrMLP": build_CorrMLP,
     "GroupMorph": build_GroupMorph,
     "IIRPNet": build_IIRPNet,

@@ -241,8 +241,8 @@ class CLMIirInfer(Dataset):
         y = (y - np.min(y)) / (np.max(y) - np.min(y))
         x, x_seg = np.transpose(x, (2, 1, 0)), np.transpose(x_seg, (2, 1, 0))
         y, y_seg = np.transpose(y, (2, 1, 0)), np.transpose(y_seg, (2, 1, 0))
-        x, x_seg = np.flip(x, axis=0), np.flip(x_seg, axis=0)
-        y, y_seg = np.flip(y, axis=0), np.flip(y_seg, axis=0)
+        x, x_seg = np.flip(x, axis=(0,2)), np.flip(x_seg, axis=(0,2))
+        y, y_seg = np.flip(y, axis=(0,2)), np.flip(y_seg, axis=(0,2))
         x, y = resize_volume(x, self.img_size), resize_volume(y, self.img_size)
         x_seg, y_seg = resize_volume(x_seg, self.img_size, order=0), resize_volume(y_seg, self.img_size, order=0)
         x, y = x[None, ...], y[None, ...]

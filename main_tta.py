@@ -45,9 +45,9 @@ if __name__ == '__main__':
                             project_name=project_name,
                             workspace="k-ishihara",
                             )
-    experiment.set_name('Nov07-220129_TransMorph_DS_TTA')
+    experiment.set_name('Nov07-220129_TransMorph-DS_TTA')
 
-    log_dir='./logs/ixi_ar/Nov07-220129_TransMorph_DS/'
+    log_dir='./logs/ixi_ar/Nov12-213347_TransMorph-DS/'
 
     # GPU configuration
     GPU_iden = 0

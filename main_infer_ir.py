@@ -52,9 +52,10 @@ def paired_list(test_dir, label_dir, mask_dir):
 def main(dataset_label):
 
     save_dir = './Quantitative_Results'
+    file_name = '/{}_Inter-Patient_Standard_Results'.format(dataset_label)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    csv_writter('Model, DSC, Affine DSC, HD95, NJD, %|J|=<0, Params(M)', save_dir+'/{}_ir_performance_results'.format(dataset_label))
+    csv_writter('Model, DSC, Affine DSC, HD95, NJD, %|J|=<0, Params(M)', save_dir + file_name)
 
     model_idx = -1
     project_name = "ixi_ir"
@@ -194,7 +195,7 @@ def main(dataset_label):
                                                                                 eval_det.avg, eval_det.std,
                                                                                 num_params
                                                                                 )
-            csv_writter(line, save_dir+'/{}_ir_performance_results'.format(dataset_label))
+            csv_writter(line, save_dir + file_name)
 
 
 if __name__ == '__main__':

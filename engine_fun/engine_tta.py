@@ -41,6 +41,14 @@ def adapt_model(dataset_label, task, lr, epochs, batch_size, log_dir, experiment
         img_size = (192, 224, 160)
         test_composed = transforms.Compose([trans.NumpyType((np.float32, np.float32))])
         test_set = datasets.CLMIar(paired_list(test_dir, label_dir, mask_dir), atlas_dir, transforms=test_composed, img_size=img_size)
+    elif dataset_label == 'cumc':
+        atlas_dir = 'C:/Users/User/env/DATASETS/IXI/atlas.pkl'
+        test_dir = 'C:/Users/User/env/DATASETS/CLMI/data/CUMC12/Heads/'
+        label_dir = 'C:/Users/User/env/DATASETS/CLMI/data/CUMC12/Atlases/'
+        mask_dir = 'C:/Users/User/env/DATASETS/CLMI/data/CUMC12/BrainMasks/'
+        img_size = (192, 224, 160)
+        test_composed = transforms.Compose([trans.NumpyType((np.float32, np.float32))])
+        test_set = datasets.CLMIar(paired_list(test_dir, label_dir, mask_dir), atlas_dir, transforms=test_composed, img_size=img_size)
     else:
         raise ValueError(f"Unsupported dataset_label: {dataset_label}")
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
@@ -111,7 +119,7 @@ def adapt_model(dataset_label, task, lr, epochs, batch_size, log_dir, experiment
         plt.close(perturb_fig)
         experiment.log_figure(figure_name="Altered Fixed Image", figure=adapted_y_fig, step=epoch)
         plt.close(adapted_y_fig)
-        del def_out, output
+        del output
         
     experiment.end()
 
