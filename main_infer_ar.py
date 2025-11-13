@@ -5,6 +5,7 @@ import numpy as np
 import os
 
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
@@ -50,15 +51,19 @@ def paired_list(test_dir, label_dir, mask_dir):
         paired_list.append((file, atlas_path, mask_path))
     return paired_list
 
-def main(dataset_label):
+def main(dataset_label, test_mode):
 
     atlas_dir = 'C:/Users/User/env/DATASETS/IXI/atlas.pkl'
 
     save_dir = './Quantitative_Results'
+    if test_mode == 'standard':
+        file_name = '/{}_Atlas-Based_Standard_Results'.format(dataset_label)
+    elif test_mode == 'tta':
+        file_name = '/{}_Atlas-Based_TTA_Results'.format(dataset_label)
+    
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    # csv_writter('Model, SSIM, Affine SSIM, NJD, %|J|=<0, Params(M)', save_dir+'/{}_ar_performance_results'.format(dataset_label))
-    csv_writter('Model, SSIM, Affine SSIM, NJD, %|J|=<0, Params(M)', save_dir+'/{}_ttaar_performance_results'.format(dataset_label)) # NOTE
+    csv_writter('Model, MSE, SSIM, Affine SSIM, NJD, %|J|=<0, Params(M)', save_dir + file_name)
 
     model_idx = -1
     project_name = "ixi_ar"
@@ -112,12 +117,14 @@ def main(dataset_label):
 
     for run_id in experiments:
         model_label = run_id.split("_")[1]
-        # model_dir = log_dir + run_id + '/model_wts/'
-        model_dir = log_dir + run_id + '/model_wts_tta/' # NOTE
+        if test_mode == 'standard':
+            model_dir = log_dir + run_id + '/model_wts/'
+            model = regisry.build_model(model_label, img_size)
+        elif test_mode == 'tta':
+            model_dir = log_dir + run_id + 'tta/{}/model_wts/'.format(dataset_label) # !!! 
+            model = TransMorph_SPTTA('./logs/ixi_ar/Oct14-205009_TransMorph/model_wts/TransMorph_dsc0.7417_epoch42.pth.tar') 
         print('Run id: {}'.format(run_id))
 
-        # model = regisry.build_model(model_label, img_size)
-        model = TransMorph_SPTTA('./logs/ixi_ar/Oct14-205009_TransMorph/model_wts/TransMorph_dsc0.7417_epoch42.pth.tar') # NOTE
         best_model = torch.load(model_dir + natsorted(os.listdir(model_dir))[model_idx], weights_only=False)['state_dict']
         print('Best model: {}'.format(natsorted(os.listdir(model_dir))[model_idx]))
         model.load_state_dict(best_model)
@@ -126,11 +133,11 @@ def main(dataset_label):
         reg_model = register_model(img_size, 'nearest')
         reg_model.cuda()
 
+        eval_mse = AverageMeter()
         eval_ssim_def = AverageMeter()
         eval_ssim_raw = AverageMeter()
         eval_det = AverageMeter()
         eval_njd = AverageMeter()
-        eval_hd95 = AverageMeter()
         with torch.no_grad():
             stdy_idx = 0
             for data in test_loader:
@@ -140,9 +147,10 @@ def main(dataset_label):
                 x_seg, y_seg = data[2], data[3]
                 output = model((x, y))
 
-                def_out = reg_model([x_seg.cuda().float(), output[1].cuda()])
-                tar = y.detach().cpu().numpy()[0, 0, :, :, :]
+                # MSE
+                mse = F.mse_loss(output[0], y, reduction='mean')
 
+                # SSIM
                 dsc_new_y = similarity(output[0], y)  # SSIM for y; Deformed vs Fixed
                 dsc_new_x = similarity(output[0], x)  # SSIM for x; Deformed vs Moving
 
@@ -151,10 +159,12 @@ def main(dataset_label):
                 NJD_val = NJD(flow)
 
                 # Percentage of Negative Values of the Jacobian Determinant (%|J|<=0))
+                tar = y.detach().cpu().numpy()[0, 0, :, :, :]
                 jac_det = jacobian_determinant_vxm(output[1].detach().cpu().numpy()[0, :, :, :, :])
                 folding_ratio = np.sum(jac_det <= 0) / np.prod(tar.shape) * 100
 
                 print('Trans dsc: {:.4f}, Raw dsc: {:.4f}'.format(dsc_new_y.item(), dsc_new_x.item()))
+                eval_mse.update(mse.item(), x.size(0))
                 eval_ssim_def.update(dsc_new_y.item(), x.size(0))
                 eval_ssim_raw.update(dsc_new_x.item(), x.size(0))
                 eval_njd.update(NJD_val.item(), x.size(0))
@@ -168,16 +178,16 @@ def main(dataset_label):
                                                                                         eval_ssim_raw.std
                                                                                         ))
             print('deformed det: {:.3f}, std: {:.3f}'.format(eval_det.avg, eval_det.std))
-            line = "{}, {:.6f}+/-{:.6f}, {:.6f}+/-{:.6f}, {:.8f}+/-{:.8f}, {:.8f}+/-{:.8f}, {:.4f}".format(
+            line = "{}, {:.6f}+/-{:.6f}, {:.6f}+/-{:.6f}, {:.6f}+/-{:.6f}, {:.8f}+/-{:.8f}, {:.8f}+/-{:.8f}, {:.4f}".format(
                                                                                 run_id.split("_", 1)[1],
+                                                                                eval_mse.avg, eval_mse.std,
                                                                                 eval_ssim_def.avg, eval_ssim_def.std,
                                                                                 eval_ssim_raw.avg, eval_ssim_raw.std,
                                                                                 eval_njd.avg, eval_njd.std,
                                                                                 eval_det.avg, eval_det.std,
                                                                                 num_params
                                                                                 )
-            # csv_writter(line, save_dir+'/{}_ar_performance_results'.format(dataset_label))
-            csv_writter(line, save_dir+'/{}_ttaar_performance_results'.format(dataset_label)) # NOTE
+            csv_writter(line, save_dir + file_name)
 
 
 if __name__ == '__main__':

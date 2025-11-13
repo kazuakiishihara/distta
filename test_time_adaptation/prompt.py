@@ -42,7 +42,6 @@ class CrossAttention(nn.Module):
 
         return x_q + attn_output, attn_weights
 
-
 ##########################################################################
 class TransMorph_SPTTA(nn.Module):
     def __init__(self, pretrained_path, patch_size=(192, 224, 160)):
@@ -66,8 +65,8 @@ class TransMorph_SPTTA(nn.Module):
     def forward(self, inputs):
         source, tar = inputs # moving, fixed
         perturbation = self.data_adaptor(tar) # NOTE For atlas-based registration
-        tar = tar + perturbation
-        x = torch.cat((source, tar), dim=1)
+        adapted_tar = tar + perturbation
+        x = torch.cat((source, adapted_tar), dim=1)
         if self.transmorph.if_convskip:
             x_s0 = x.clone()
             x_s1 = self.transmorph.avg_pool(x)
@@ -78,7 +77,7 @@ class TransMorph_SPTTA(nn.Module):
             f5 = None
         
         feats_m = self.transmorph.transformer(source)
-        feats_f = self.transmorph.transformer(tar)
+        feats_f = self.transmorph.transformer(adapted_tar)
 
         adapted_feats_f, attn_weights = self.prompt2feature(x_q=feats_f[-1], x_kv=self.data_prompt)
 
@@ -97,7 +96,7 @@ class TransMorph_SPTTA(nn.Module):
         x = self.transmorph.up4(x, f5)
         flow = self.transmorph.reg_head(x)
         out = self.transmorph.spatial_trans(source, flow)
-        return out, flow
+        return out, flow, (perturbation, adapted_tar)
 
 if __name__ == '__main__':
     pretrained_path = './logs/ixi_ar/Oct14-205009_TransMorph/model_wts/TransMorph_dsc0.7417_epoch42.pth.tar'

@@ -1,6 +1,7 @@
 
-# python main_train.py --task ar --model_label TransMorph_DS
-python main_tta.py
+python main_train.py --task ar --model_label TransMorph_DS
+python main_train.py --task ir --model_label TransMorph_DS
+# python main_tta.py
 
 # python main_infer_ar.py --dataset_label ixi
 # python main_infer_ar.py --dataset_label mgh

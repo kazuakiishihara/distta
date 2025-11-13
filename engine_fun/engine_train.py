@@ -21,7 +21,7 @@ from utils.utils import AverageMeter, register_model, dice_val_VOI, similarity
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6  # Number of parameters in millions
 
-def train_model(dataset_label, task, seg_loss, model_label, lr, epochs, batch_size, log_dir, experiment):
+def train_model(dataset_label, task, model_label, lr, epochs, batch_size, log_dir, experiment):
 
     # Write down the training performance into csv file
     csv_path = os.path.join(log_dir, "metrics_per_epoch.csv")
@@ -47,19 +47,13 @@ def train_model(dataset_label, task, seg_loss, model_label, lr, epochs, batch_si
         train_dir = 'C:/Users/User/env/DATASETS/IXI/Train/'
         val_dir = 'C:/Users/User/env/DATASETS/IXI/Val/'
         img_size = (192, 224, 160)
-        if seg_loss:
-            train_set = datasets.IXIBrainInferDataset(glob.glob(train_dir + '*.pkl'), atlas_dir, transforms=val_composed, img_size=img_size)
-        else:
-            train_set = datasets.IXIBrainDataset(glob.glob(train_dir + '*.pkl'), atlas_dir, transforms=train_composed, img_size=img_size)
+        train_set = datasets.IXIBrainDataset(glob.glob(train_dir + '*.pkl'), atlas_dir, transforms=train_composed, img_size=img_size)
         val_set = datasets.IXIBrainInferDataset(glob.glob(val_dir + '*.pkl'), atlas_dir, transforms=val_composed, img_size=img_size)
     elif dataset_label == "ixi" and task == "ir":
         train_dir = 'C:/Users/User/env/DATASETS/IXI_ir/Train/'
         val_dir = 'C:/Users/User/env/DATASETS/IXI_ir/Val/'
         img_size = (192, 224, 160)
-        if seg_loss:
-            train_set = datasets.IXIirInfer(glob.glob(train_dir + '*.pkl'), transforms=val_composed, img_size=img_size)
-        else:
-            train_set = datasets.IXIir(glob.glob(train_dir + '*.pkl'), transforms=train_composed, img_size=img_size)
+        train_set = datasets.IXIir(glob.glob(train_dir + '*.pkl'), transforms=train_composed, img_size=img_size)
         val_set = datasets.IXIirInfer(glob.glob(val_dir + '*.pkl'), transforms=val_composed, img_size=img_size)
     # elif dataset_label == "lpba":
     #     train_dir = 'C:/Users/User/env/DATASETS/LPBA/Train/'
@@ -100,28 +94,15 @@ def train_model(dataset_label, task, seg_loss, model_label, lr, epochs, batch_si
         for data in train_loader:
             idx += 1
             model.train()
-            adjust_learning_rate(optimizer, epoch-1, epochs, lr) # Adjust learning rate
+            adjust_learning_rate(optimizer, epoch-1, epochs, lr)
             data = [t.cuda() for t in data]
             x, y = data[0], data[1] # x: moving image, y: fixed image
-            if seg_loss:
-                x_seg, y_seg = data[2], data[3]
             output = model((x, y))
 
             # Loss calculation
             loss_ncc = criterion_ncc(output[0], y) * weights[0]
-            if seg_loss:
-                def_out = reg_model([x_seg.cuda().float(), output[1].cuda()])
-                loss_dsc = criterion_dsc(def_out.long(), y_seg.long()) * weights[1]
-                if model_label == 'MoSE':
-                    loss_dsc_m = criterion_dsc(output[2][0].long(), x_seg.long()) * 1.0
-                    loss_dsc_f = criterion_dsc(output[3][0].long(), y_seg.long()) * 1.0
-                    loss_norm_m = torch.norm(output[2][1], p=1)
-                    loss_norm_f = torch.norm(output[3][1], p=1)
-                    loss_dsc += loss_dsc_m + loss_dsc_f + loss_norm_m + loss_norm_f
-            else:
-                loss_dsc = 0
             loss_reg = criterion_reg(output[1], y) * weights[2]
-            loss = loss_ncc + loss_dsc + loss_reg
+            loss = loss_ncc + loss_reg
             loss_all.update(loss.item(), y.numel())
 
             optimizer.zero_grad()
@@ -197,18 +178,18 @@ def train_model(dataset_label, task, seg_loss, model_label, lr, epochs, batch_si
                     }
         experiment.log_metrics(metrics, step=epoch)
         plt.switch_backend('agg')
-        pred_fig = comput_fig(def_out)
-        grid_fig = comput_fig(def_grid)
-        x_fig = comput_fig(x_seg)
-        tar_fig = comput_fig(y_seg)
-        experiment.log_figure(figure_name="Grid", figure=grid_fig, step=epoch)
-        plt.close(grid_fig)
-        experiment.log_figure(figure_name="input", figure=x_fig, step=epoch)
-        plt.close(x_fig)
-        experiment.log_figure(figure_name="ground truth", figure=tar_fig, step=epoch)
-        plt.close(tar_fig)
-        experiment.log_figure(figure_name="prediction", figure=pred_fig, step=epoch)
-        plt.close(pred_fig)
+        def_out_fig = comput_fig_seg(def_out)
+        def_grid_fig = comput_fig_flow(def_grid)
+        x_seg_fig = comput_fig_seg(x_seg)
+        y_seg_fig = comput_fig_seg(y_seg)
+        experiment.log_figure(figure_name="Deformation Field", figure=def_grid_fig, step=epoch)
+        plt.close(def_grid_fig)
+        experiment.log_figure(figure_name="Moving Seg.", figure=x_seg_fig, step=epoch)
+        plt.close(x_seg_fig)
+        experiment.log_figure(figure_name="Fixed Seg.", figure=y_seg_fig, step=epoch)
+        plt.close(y_seg_fig)
+        experiment.log_figure(figure_name="Warped Moving Seg.", figure=def_out_fig, step=epoch)
+        plt.close(def_out_fig)
         eval_dsc.reset()
         eval_ssim_new_y.reset()
         eval_ssim_new_x.reset()
@@ -221,13 +202,35 @@ def train_model(dataset_label, task, seg_loss, model_label, lr, epochs, batch_si
                                 })
     experiment.end()
 
-def comput_fig(img):
-    img = img.detach().cpu().numpy()[0, 0, 56:72, :, :]
+def comput_fig_flow(img):
+    b, c, d, h, w = img.shape
+    indices = np.linspace(0, d - 1, 16, dtype=int)
+    img = img.detach().cpu().numpy()[0, 0]
+    img = img[indices, :, :]
     fig = plt.figure(figsize=(12,12), dpi=180)
     for i in range(img.shape[0]):
         plt.subplot(4, 4, i + 1)
         plt.axis('off')
         plt.imshow(img[i, :, :], cmap='gray')
+    fig.subplots_adjust(wspace=0, hspace=0)
+    return fig
+
+def comput_fig_seg(img):
+    """
+    Value of 0 in segmentation label will be light blue.
+    """
+    VOI_lbls = [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 21, 22, 23, 25, 26, 27, 28, 29, 30, 31, 32, 34, 36] # IXI
+    b, c, d, h, w = img.shape
+    indices = np.linspace(0, d - 1, 16, dtype=int)
+    img = img.detach().cpu().numpy()[0, 0]
+    mask = np.isin(img, VOI_lbls)
+    img = np.where(mask, img, 0)
+    img = img[indices, :, :]
+    fig = plt.figure(figsize=(12,12), dpi=180)
+    for i in range(img.shape[0]):
+        plt.subplot(4, 4, i + 1)
+        plt.axis('off')
+        plt.imshow(img[i, :, :], cmap='tab20', vmin=0, vmax=max(VOI_lbls),interpolation='nearest')
     fig.subplots_adjust(wspace=0, hspace=0)
     return fig
 
